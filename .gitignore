@@ -9,14 +9,14 @@ lerna-debug.log*
 
 
 # frontend
-./frontend/node_modules
-./frontend/dist
-./frontend/dist-ssr
+/frontend/node_modules
+/frontend/dist
+/frontend/dist-ssr
 *.local
 
 # frontend
-./backend/node_modules
-./backend/dist
+/backend/node_modules
+/backend/dist
 /backend/dist-ssr
 *.local
 
