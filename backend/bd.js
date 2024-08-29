@@ -7,6 +7,7 @@ try {
   console.log(err);
 }
 
+// User schema
 const userSchema = mongoose.Schema({
   username: {
     type: String,
@@ -40,6 +41,7 @@ const userSchema = mongoose.Schema({
   },
 });
 
+// Hash and password check methods
 userSchema.methods.createHash = async (plainTextPassword) => {
   const saltRounds = 10;
   const salt = await bcrypt.genSalt(saltRounds);
@@ -50,6 +52,7 @@ userSchema.methods.checkPassword = async function (userPassword) {
   return await bcrypt.compare(userPassword, this.password);
 };
 
+// Account schema
 const accountSchema = mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -60,26 +63,33 @@ const accountSchema = mongoose.Schema({
   balance: {
     type: Number,
     required: true,
+    default: 0, // Set a default balance of 0
   },
   transactions: [{ type: mongoose.Schema.Types.ObjectId, ref: "Transactions" }],
 });
 
+// Transaction schema
 const transactionsSchema = mongoose.Schema({
   senderAccountId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Account",
-    required: true,
+    required: false, // Not required for deposits
     index: true,
   },
   receiverAccountId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Account",
-    required: true,
+    required: false, // Not required for withdrawals
     index: true,
   },
   amount: {
     type: Number,
-    require: true,
+    required: true,
+  },
+  type: {
+    type: String,
+    enum: ["deposit", "withdrawal", "transfer"],
+    required: true,
   },
   timestamp: {
     type: Date,
@@ -91,6 +101,7 @@ const transactionsSchema = mongoose.Schema({
   },
 });
 
+// Recharge schema
 const rechargeSchema = mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -116,6 +127,7 @@ const rechargeSchema = mongoose.Schema({
   },
 });
 
+// Models
 const Account = mongoose.model("Account", accountSchema);
 const User = mongoose.model("Users", userSchema);
 const Transaction = mongoose.model("Transactions", transactionsSchema);

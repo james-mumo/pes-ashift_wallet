@@ -8,6 +8,7 @@ import axios from "../axios";
 import noTran from "../assets/imgs/no-transaction.png";
 import { SideBarOpen } from "../store/atom/sideBarAtom";
 import loading from "../assets/imgs/Loading Square.gif";
+import RechargeDetailModal from "../components/RechargeDetailModal";
 
 const Modal = ({ isOpen, onClose, onSubmit }) => {
   const [paymentOption, setPaymentOption] = useState("");
@@ -82,6 +83,7 @@ const TopUp = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const setTransactionInfo = useSetRecoilState(transactionAtom);
   const setSideBarOpen = useSetRecoilState(SideBarOpen);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   useEffect(() => {
     setSideBarOpen(false);
@@ -125,35 +127,35 @@ const TopUp = () => {
 
   const [monthlyTransactions, setMonthlyTransactions] = useState([]);
 
-  useEffect(() => {
-    const CalculateMonthlyTransactions = () => {
-      let monthlyTrans = {};
-      transactions.forEach((transaction) => {
-        const date = new Date(transaction.time);
-        const month = `${date.toLocaleString("default", {
-          month: "long",
-        })}-${date.getFullYear()}`;
-        if (!monthlyTrans[month]) {
-          monthlyTrans[month] = [];
-        }
-        monthlyTrans[month].push(transaction);
-      });
-      monthlyTrans = Object.entries(monthlyTrans).sort(
-        (month1, month2) =>
-          new Date(month2[1][0].time) - new Date(month1[1][0].time)
-      );
-      monthlyTrans.forEach((monthTransactions) => {
-        monthTransactions[1].sort(
-          (tran1, tran2) => new Date(tran2.time) - new Date(tran1.time)
-        );
-      });
+  // useEffect(() => {
+  //   // const CalculateMonthlyTransactions = () => {
+  //   //   let monthlyTrans = {};
+  //   //   transactions.forEach((transaction) => {
+  //   //     const date = new Date(transaction.time);
+  //   //     const month = `${date.toLocaleString("default", {
+  //   //       month: "long",
+  //   //     })}-${date.getFullYear()}`;
+  //   //     if (!monthlyTrans[month]) {
+  //   //       monthlyTrans[month] = [];
+  //   //     }
+  //   //     monthlyTrans[month].push(transaction);
+  //   //   });
+  //   //   monthlyTrans = Object.entries(monthlyTrans).sort(
+  //   //     (month1, month2) =>
+  //   //       new Date(month2[1][0].time) - new Date(month1[1][0].time)
+  //   //   );
+  //   //   monthlyTrans.forEach((monthTransactions) => {
+  //   //     monthTransactions[1].sort(
+  //   //       (tran1, tran2) => new Date(tran2.time) - new Date(tran1.time)
+  //   //     );
+  //   //   });
 
-      setMonthlyTransactions(monthlyTrans);
-    };
+  //   //   setMonthlyTransactions(monthlyTrans);
+  //   // };
 
-    CalculateMonthlyTransactions();
-    transactions.length ? setIsLoading(false) : null;
-  }, [transactions]);
+  //   CalculateMonthlyTransactions();
+  //   transactions.length ? setIsLoading(false) : null;
+  // }, [transactions]);
 
   const handleAddOption = () => {
     setModalOpen(true);
@@ -182,6 +184,39 @@ const TopUp = () => {
       setRechargeOptions(response.data);
     } catch (error) {
       setErrMsg(error?.response?.data?.message || "Top-up failed");
+    }
+  };
+
+  const handleAuthorizeTopUp = async ({
+    amount,
+    paymentOption,
+    details,
+    account,
+  }) => {
+    console.log({ amount, paymentOption, details, account });
+    if (!amount) {
+      alert("Please complete all fields.");
+      return;
+    }
+    try {
+      const token = `Bearer ${localStorage.getItem("token")}`;
+      await axios.post(
+        "/account/deposit",
+        { amount, paymentOption, details, account },
+        {
+          headers: { authorization: token },
+        }
+      );
+      // Handle successful authorization
+
+      setDetailModalOpen(false);
+      // Refresh recharge options
+      const response = await axios.get("/recharge/recharges", {
+        headers: { authorization: token },
+      });
+      setRechargeOptions(response.data);
+    } catch (error) {
+      setErrMsg(error?.response?.data?.message || "Authorization failed");
     }
   };
 
@@ -279,7 +314,7 @@ const TopUp = () => {
                   </button>
                 </div>
               ) : (
-                <>
+                <div>
                   <div className="flex w-full text-yellow-400 font-semibold text-sm">
                     <div className="flex flex-1">Added Recharge Options</div>
                     <button
@@ -295,11 +330,38 @@ const TopUp = () => {
                         className="flex flex-col px-3 min-w-[40%] items-center justify-stretch"
                         key={option._id}
                       >
-                        <RechargeCard option={option} />
+                        <div className="bg-gray-800 p-4 rounded-md shadow-md mb-4 text-yellow-400">
+                          <h2 className="text-xl font-semibold">
+                            Recharge Option
+                          </h2>
+                          <p>
+                            <strong>Account:</strong> {option.account}
+                          </p>
+                          <p>
+                            <strong>Details:</strong> {option.details}
+                          </p>
+                          <p>
+                            <strong>Payment Option:</strong>{" "}
+                            {option.paymentOption}
+                          </p>
+                          <p>
+                            <strong>Timestamp:</strong>{" "}
+                            {new Date(option.timestamp).toLocaleString()}
+                          </p>
+                          <button
+                            className="bg-blue-500 text-white px-4 py-2 mt-2 rounded-md"
+                            onClick={() => {
+                              setSelectedOption(option);
+                              setDetailModalOpen(true);
+                            }}
+                          >
+                            Authorize
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -310,26 +372,14 @@ const TopUp = () => {
         onClose={() => setModalOpen(false)}
         onSubmit={handleTopUp}
       />
+      <RechargeDetailModal
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        onSubmit={handleAuthorizeTopUp}
+        selectedOption={selectedOption}
+      />
     </>
   );
 };
-
-const RechargeCard = ({ option }) => (
-  <div className="bg-gray-800 p-4 rounded-md shadow-md mb-4 text-yellow-400">
-    <h2 className="text-xl font-semibold">Recharge Option</h2>
-    <p>
-      <strong>Account:</strong> {option.account}
-    </p>
-    <p>
-      <strong>Details:</strong> {option.details}
-    </p>
-    <p>
-      <strong>Payment Option:</strong> {option.paymentOption}
-    </p>
-    <p>
-      <strong>Timestamp:</strong> {new Date(option.timestamp).toLocaleString()}
-    </p>
-  </div>
-);
 
 export default TopUp;

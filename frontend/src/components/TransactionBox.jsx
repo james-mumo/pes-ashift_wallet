@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 const TransactionBox = () => {
   const navigate = useNavigate();
   const [info, setInfo] = useRecoilState(transactionAtom);
+  console.log(info);
   const date = new Date(info.transactionInfo.time);
 
   const time = `${date.toLocaleString("default", {
@@ -50,7 +51,7 @@ const TransactionBox = () => {
               background: info.transactionInfo.accountInfo.userInfo.avatar,
             }}
           >
-            {info.transactionInfo.accountInfo.userInfo.firstName[0]}
+            {info.firstName}
           </div>
           <div>
             {info.transactionInfo.type == "credit" ? "From " : "To "}

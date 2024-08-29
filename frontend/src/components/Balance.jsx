@@ -20,7 +20,7 @@ const Balance = ({ amount }) => {
         <div className="flex flex-col flex-1">
           <div className="text-sm text-[#7e7e7e]">Current balance</div>
           <div className="text-4xl lg:text-5xl font-semibold">
-            Ksh{parseFloat(amount).toLocaleString("en-IN")}
+            Ksh{parseFloat(amount).toLocaleString("en-KE")}
           </div>
         </div>
         <div className="flex">

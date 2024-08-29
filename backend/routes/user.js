@@ -168,76 +168,121 @@ userRouter.put("/change", authMiddleware, async (req, res) => {
 
 userRouter.get("/dashboard", authMiddleware, async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(req.userId)) {
-    return res.status(400).json({
-      message: "Invalid user Id",
-    });
+    return res.status(400).json({ message: "Invalid user Id" });
   }
+
   const user = await User.findById(req.userId);
   if (!user) {
     return res.status(404).json({ error: "User not found" });
   }
-  const account = await Account.findOne({ userId: req.userId });
-  await Account.populate([account], {
-    path: "transactions",
-    options: {
-      limit: 5,
-      sort: {
-        timestamp: -1,
-      },
-    },
-  });
 
-  let transactions = account.transactions;
-  await Account.populate(transactions, [
+  // Convert userId to ObjectId
+  const userIdObjectId = new mongoose.Types.ObjectId(req.userId);
+
+  // Aggregate pipeline to fetch transactions with user and account information
+  const transactions = await Account.aggregate([
+    { $match: { userId: userIdObjectId } },
     {
-      path: "senderAccountId",
-      select: "userId",
-      match: { userId: { $ne: req.userId } },
-    }, // Populate senderAccountId if userId is not the user's userId
-    {
-      path: "receiverAccountId",
-      select: "userId",
-      match: { userId: { $ne: req.userId } },
+      $lookup: {
+        from: "transactions",
+        localField: "transactions",
+        foreignField: "_id",
+        as: "transactions",
+      },
     },
+    { $unwind: "$transactions" },
     {
-      path: "senderAccountId",
-      populate: {
-        path: "userId",
-        select: ["firstName", "lastName", "_id", "avatar"],
+      $lookup: {
+        from: "accounts",
+        localField: "transactions.senderAccountId",
+        foreignField: "_id",
+        as: "transactions.senderAccount",
       },
     },
     {
-      path: "receiverAccountId",
-      populate: {
-        path: "userId",
-        select: ["firstName", "lastName", "_id", "avatar"],
+      $unwind: {
+        path: "$transactions.senderAccount",
+        preserveNullAndEmptyArrays: true,
       },
-    }, // Populate receiverAccountId if userId is not the user's userId
+    },
+    {
+      $lookup: {
+        from: "accounts",
+        localField: "transactions.receiverAccountId",
+        foreignField: "_id",
+        as: "transactions.receiverAccount",
+      },
+    },
+    {
+      $unwind: {
+        path: "$transactions.receiverAccount",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "transactions.senderAccount.userId",
+        foreignField: "_id",
+        as: "transactions.senderUser",
+      },
+    },
+    {
+      $unwind: {
+        path: "$transactions.senderUser",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $lookup: {
+        from: "users",
+        localField: "transactions.receiverAccount.userId",
+        foreignField: "_id",
+        as: "transactions.receiverUser",
+      },
+    },
+    {
+      $unwind: {
+        path: "$transactions.receiverUser",
+        preserveNullAndEmptyArrays: true,
+      },
+    },
+    {
+      $project: {
+        transactionId: "$transactions._id",
+        type: {
+          $cond: {
+            if: { $eq: ["$transactions.senderAccountId", null] },
+            then: "credit",
+            else: "debit",
+          },
+        },
+        accountInfo: {
+          $cond: {
+            if: { $eq: ["$transactions.senderAccountId", null] },
+            then: {
+              accountId: "$transactions.receiverAccount._id",
+              userInfo: "$transactions.receiverUser",
+            },
+            else: {
+              accountId: "$transactions.senderAccount._id",
+              userInfo: "$transactions.senderUser",
+            },
+          },
+        },
+        time: "$transactions.timestamp",
+        amount: "$transactions.amount",
+      },
+    },
+    { $sort: { "transactions.timestamp": -1 } },
+    { $limit: 5 },
   ]);
-  transactions = transactions.map((transaction) => {
-    let type;
-    let accountInfo = {};
-    if (transaction.senderAccountId == null) {
-      type = "debit";
-      accountInfo = {
-        accountId: transaction.receiverAccountId._id,
-        userInfo: transaction.receiverAccountId.userId,
-      };
-    } else if (transaction.receiverAccountId == null) {
-      type = "credit";
-      accountInfo = {
-        accountId: transaction.senderAccountId._id,
-        userInfo: transaction.senderAccountId.userId,
-      };
-    }
-    return {
-      transactionId: transaction._id,
-      type: type,
-      accountInfo: accountInfo,
-      time: transaction.timestamp,
-      amount: transaction.amount,
-    };
-  });
+
+  const account = await Account.findOne({ userId: userIdObjectId });
+  if (!account) {
+    return res.status(404).json({ error: "Account not found" });
+  }
+
   res.json({
     firstName: user.firstName,
     lastName: user.lastName,
